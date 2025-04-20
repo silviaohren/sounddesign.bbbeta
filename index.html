@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Compact Node Grid</title>
+    <title>Interactive Line Grid</title>
     <style>
         body, html {
             margin: 0;
@@ -25,93 +25,189 @@
             background-color: rgba(24, 24, 37, 0.8);
         }
         
-        .node-grid {
+        .grid-line {
             position: absolute;
-            top: 0;
-            left: 0;
+            background-color: rgba(92, 187, 246, 0.3);
+            transition: transform 0.2s ease, background-color 0.2s ease;
+        }
+        
+        .horizontal-line {
             width: 100%;
+            height: 1px;
+            transform-origin: left;
+        }
+        
+        .vertical-line {
+            width: 1px;
             height: 100%;
+            transform-origin: top;
         }
         
-        .node {
+        .grid-line.active {
+            background-color: rgba(255, 95, 86, 0.6);
+            box-shadow: 0 0 5px rgba(255, 95, 86, 0.3);
+        }
+        
+        .intersection-point {
             position: absolute;
-            width: 3px;
-            height: 3px;
-            background-color: rgba(92, 187, 246, 0.5);
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
-            transition: transform 0.15s ease, background-color 0.15s ease;
-        }
-        
-        .node.active {
-            background-color: rgba(255, 95, 86, 0.8);
-            box-shadow: 0 0 5px rgba(255, 95, 86, 0.5);
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none;
         }
     </style>
 </head>
 <body>
-    <div class="grid-container">
-        <div class="node-grid" id="nodeGrid"></div>
+    <div class="grid-container" id="gridContainer">
+        <!-- Le linee e i punti di intersezione verranno generati via JavaScript -->
     </div>
     
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const nodeGrid = document.getElementById('nodeGrid');
-            const gridContainer = document.querySelector('.grid-container');
+            const gridContainer = document.getElementById('gridContainer');
             
             // Configurazione
-            const nodeSpacing = 15; // Spazio ridotto tra i nodi
-            const magnifierRadius = 50; // Raggio dell'area di ingrandimento
-            const magnificationFactor = 2.5; // Fattore di ingrandimento
+            const lineSpacing = 20; // Spazio tra le linee
+            const influenceRadius = 60; // Raggio di influenza del mouse
+            const maxDeformation = 15; // Deformazione massima delle linee
             
-            let nodes = [];
+            let horizontalLines = [];
+            let verticalLines = [];
+            let intersectionPoints = [];
             let gridWidth, gridHeight;
             
             // Funzione per creare la griglia
             function createGrid() {
                 // Pulisci la griglia esistente
-                nodeGrid.innerHTML = '';
-                nodes = [];
+                gridContainer.innerHTML = '';
+                horizontalLines = [];
+                verticalLines = [];
+                intersectionPoints = [];
                 
                 // Ottieni le dimensioni del contenitore
                 gridWidth = gridContainer.clientWidth;
                 gridHeight = gridContainer.clientHeight;
                 
-                // Calcola il numero di nodi orizzontali e verticali
-                const numCols = Math.floor(gridWidth / nodeSpacing) + 1;
-                const numRows = Math.floor(gridHeight / nodeSpacing) + 1;
+                // Calcola il numero di linee orizzontali e verticali
+                const numHorizontalLines = Math.floor(gridHeight / lineSpacing) + 1;
+                const numVerticalLines = Math.floor(gridWidth / lineSpacing) + 1;
                 
-                // Crea i nodi
-                for (let i = 0; i < numRows; i++) {
-                    for (let j = 0; j < numCols; j++) {
-                        const x = j * nodeSpacing;
-                        const y = i * nodeSpacing;
+                // Crea le linee orizzontali
+                for (let i = 0; i < numHorizontalLines; i++) {
+                    const y = i * lineSpacing;
+                    
+                    const line = document.createElement('div');
+                    line.className = 'grid-line horizontal-line';
+                    line.style.top = `${y}px`;
+                    
+                    gridContainer.appendChild(line);
+                    
+                    horizontalLines.push({
+                        element: line,
+                        y: y,
+                        points: [] // Punti di controllo per la deformazione
+                    });
+                }
+                
+                // Crea le linee verticali
+                for (let i = 0; i < numVerticalLines; i++) {
+                    const x = i * lineSpacing;
+                    
+                    const line = document.createElement('div');
+                    line.className = 'grid-line vertical-line';
+                    line.style.left = `${x}px`;
+                    
+                    gridContainer.appendChild(line);
+                    
+                    verticalLines.push({
+                        element: line,
+                        x: x,
+                        points: [] // Punti di controllo per la deformazione
+                    });
+                }
+                
+                // Crea i punti di intersezione (invisibili)
+                for (let i = 0; i < numHorizontalLines; i++) {
+                    for (let j = 0; j < numVerticalLines; j++) {
+                        const x = j * lineSpacing;
+                        const y = i * lineSpacing;
                         
-                        const node = document.createElement('div');
-                        node.className = 'node';
-                        node.style.left = `${x}px`;
-                        node.style.top = `${y}px`;
-                        
-                        // Aggiungi un po' di casualità alla dimensione dei nodi
-                        const randomSize = 1.5 + Math.random() * 2;
-                        node.style.width = `${randomSize}px`;
-                        node.style.height = `${randomSize}px`;
-                        
-                        // Aggiungi un po' di casualità all'opacità
-                        const randomOpacity = 0.3 + Math.random() * 0.7;
-                        node.style.backgroundColor = `rgba(92, 187, 246, ${randomOpacity})`;
-                        
-                        nodeGrid.appendChild(node);
-                        
-                        // Memorizza il nodo e la sua posizione originale
-                        nodes.push({
-                            element: node,
+                        const point = {
                             x: x,
                             y: y,
-                            size: randomSize
-                        });
+                            horizontalLine: horizontalLines[i],
+                            verticalLine: verticalLines[j],
+                            offsetX: 0,
+                            offsetY: 0
+                        };
+                        
+                        // Aggiungi il punto alle linee corrispondenti
+                        horizontalLines[i].points.push(point);
+                        verticalLines[j].points.push(point);
+                        
+                        intersectionPoints.push(point);
                     }
                 }
+            }
+            
+            // Funzione per deformare le linee
+            function deformLines(mouseX, mouseY) {
+                // Resetta tutte le linee
+                horizontalLines.forEach(line => {
+                    line.element.style.transform = '';
+                    line.element.classList.remove('active');
+                });
+                
+                verticalLines.forEach(line => {
+                    line.element.style.transform = '';
+                    line.element.classList.remove('active');
+                });
+                
+                // Calcola le deformazioni per ogni punto di intersezione
+                intersectionPoints.forEach(point => {
+                    const dx = mouseX - point.x;
+                    const dy = mouseY - point.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < influenceRadius) {
+                        // Calcola l'offset basato sulla distanza
+                        const influence = 1 - distance / influenceRadius;
+                        const offsetX = dx * influence * maxDeformation / influenceRadius;
+                        const offsetY = dy * influence * maxDeformation / influenceRadius;
+                        
+                        point.offsetX = offsetX;
+                        point.offsetY = offsetY;
+                        
+                        // Marca le linee come attive
+                        point.horizontalLine.element.classList.add('active');
+                        point.verticalLine.element.classList.add('active');
+                    } else {
+                        point.offsetX = 0;
+                        point.offsetY = 0;
+                    }
+                });
+                
+                // Applica le deformazioni alle linee orizzontali
+                horizontalLines.forEach(line => {
+                    if (line.points.some(p => p.offsetY !== 0)) {
+                        // Crea una trasformazione CSS per deformare la linea
+                        const controlPoints = line.points.map(p => `${p.x}px ${p.y + p.offsetY}px`).join(', ');
+                        line.element.style.clipPath = `polygon(0% ${line.y}px, ${controlPoints}, 100% ${line.y}px)`;
+                    } else {
+                        line.element.style.clipPath = '';
+                    }
+                });
+                
+                // Applica le deformazioni alle linee verticali
+                verticalLines.forEach(line => {
+                    if (line.points.some(p => p.offsetX !== 0)) {
+                        // Crea una trasformazione CSS per deformare la linea
+                        const controlPoints = line.points.map(p => `${p.x + p.offsetX}px ${p.y}px`).join(', ');
+                        line.element.style.clipPath = `polygon(${line.x}px 0%, ${controlPoints}, ${line.x}px 100%)`;
+                    } else {
+                        line.element.style.clipPath = '';
+                    }
+                });
             }
             
             // Funzione per gestire il movimento del mouse
@@ -120,39 +216,28 @@
                 const mouseX = e.clientX - rect.left;
                 const mouseY = e.clientY - rect.top;
                 
-                // Aggiorna la posizione di ogni nodo
-                nodes.forEach(node => {
-                    const dx = mouseX - node.x;
-                    const dy = mouseY - node.y;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-                    
-                    // Se il nodo è all'interno del raggio del magnifier
-                    if (distance < magnifierRadius) {
-                        // Calcola il fattore di scala basato sulla distanza
-                        const scale = 1 + (magnificationFactor - 1) * (1 - distance / magnifierRadius);
-                        
-                        // Calcola la nuova posizione
-                        const distanceRatio = distance / magnifierRadius;
-                        const translateX = dx * (1 - distanceRatio) * 0.3;
-                        const translateY = dy * (1 - distanceRatio) * 0.3;
-                        
-                        // Applica la trasformazione
-                        node.element.style.transform = `translate(calc(-50% + ${translateX}px), calc(-50% + ${translateY}px)) scale(${scale})`;
-                        node.element.classList.add('active');
-                    } else {
-                        // Ripristina la posizione originale
-                        node.element.style.transform = 'translate(-50%, -50%)';
-                        node.element.classList.remove('active');
-                    }
-                });
+                deformLines(mouseX, mouseY);
             }
             
             // Funzione per gestire l'uscita del mouse
             function handleMouseLeave() {
-                // Ripristina tutti i nodi
-                nodes.forEach(node => {
-                    node.element.style.transform = 'translate(-50%, -50%)';
-                    node.element.classList.remove('active');
+                // Resetta tutte le linee
+                horizontalLines.forEach(line => {
+                    line.element.style.transform = '';
+                    line.element.style.clipPath = '';
+                    line.element.classList.remove('active');
+                });
+                
+                verticalLines.forEach(line => {
+                    line.element.style.transform = '';
+                    line.element.style.clipPath = '';
+                    line.element.classList.remove('active');
+                });
+                
+                // Resetta tutti i punti
+                intersectionPoints.forEach(point => {
+                    point.offsetX = 0;
+                    point.offsetY = 0;
                 });
             }
             
