@@ -3,25 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive Node Grid</title>
+    <title>Compact Node Grid</title>
     <style>
         body, html {
             margin: 0;
             padding: 0;
             width: 100%;
             height: 100%;
-            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
             background-color: #1E1E2E;
-            font-family: monospace;
         }
         
         .grid-container {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            position: relative;
+            width: 600px;
+            height: 300px;
+            border: 1px solid rgba(92, 187, 246, 0.2);
             overflow: hidden;
+            background-color: rgba(24, 24, 37, 0.8);
         }
         
         .node-grid {
@@ -30,132 +31,55 @@
             left: 0;
             width: 100%;
             height: 100%;
-            pointer-events: none;
         }
         
         .node {
             position: absolute;
-            width: 4px;
-            height: 4px;
+            width: 3px;
+            height: 3px;
             background-color: rgba(92, 187, 246, 0.5);
             border-radius: 50%;
             transform: translate(-50%, -50%);
-            transition: transform 0.2s ease, background-color 0.2s ease;
-            pointer-events: auto;
+            transition: transform 0.15s ease, background-color 0.15s ease;
         }
         
         .node.active {
             background-color: rgba(255, 95, 86, 0.8);
-            box-shadow: 0 0 10px rgba(255, 95, 86, 0.5);
-        }
-        
-        .grid-line {
-            position: absolute;
-            background-color: rgba(92, 187, 246, 0.1);
-            pointer-events: none;
-            z-index: -1;
-        }
-        
-        .horizontal-line {
-            width: 100%;
-            height: 1px;
-        }
-        
-        .vertical-line {
-            width: 1px;
-            height: 100%;
-        }
-        
-        .magnifier {
-            position: absolute;
-            width: 150px;
-            height: 150px;
-            border-radius: 50%;
-            border: 1px solid rgba(92, 187, 246, 0.3);
-            pointer-events: none;
-            z-index: 10;
-            display: none;
-            background: radial-gradient(
-                circle at center,
-                rgba(30, 30, 46, 0.1) 0%,
-                rgba(30, 30, 46, 0.5) 80%,
-                rgba(30, 30, 46, 0.8) 100%
-            );
-            backdrop-filter: blur(1px);
-        }
-        
-        .info-panel {
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            background-color: rgba(30, 30, 46, 0.8);
-            color: #5CBBF6;
-            padding: 10px 15px;
-            border-left: 3px solid #FF5F56;
-            font-size: 14px;
-            z-index: 100;
+            box-shadow: 0 0 5px rgba(255, 95, 86, 0.5);
         }
     </style>
 </head>
 <body>
     <div class="grid-container">
         <div class="node-grid" id="nodeGrid"></div>
-        <div class="magnifier" id="magnifier"></div>
-    </div>
-    
-    <div class="info-panel">
-        <p>Move your cursor over the grid to see the magnification effect</p>
-        <p>Nodes: <span id="nodeCount">0</span> | Active: <span id="activeCount">0</span></p>
     </div>
     
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const nodeGrid = document.getElementById('nodeGrid');
-            const magnifier = document.getElementById('magnifier');
-            const nodeCountEl = document.getElementById('nodeCount');
-            const activeCountEl = document.getElementById('activeCount');
+            const gridContainer = document.querySelector('.grid-container');
             
             // Configurazione
-            const nodeSpacing = 40; // Spazio tra i nodi in pixel
-            const magnifierRadius = 75; // Raggio dell'area di ingrandimento
+            const nodeSpacing = 15; // Spazio ridotto tra i nodi
+            const magnifierRadius = 50; // Raggio dell'area di ingrandimento
             const magnificationFactor = 2.5; // Fattore di ingrandimento
             
             let nodes = [];
             let gridWidth, gridHeight;
-            let nodeCount = 0;
             
             // Funzione per creare la griglia
             function createGrid() {
                 // Pulisci la griglia esistente
                 nodeGrid.innerHTML = '';
                 nodes = [];
-                nodeCount = 0;
                 
-                // Ottieni le dimensioni della finestra
-                gridWidth = window.innerWidth;
-                gridHeight = window.innerHeight;
+                // Ottieni le dimensioni del contenitore
+                gridWidth = gridContainer.clientWidth;
+                gridHeight = gridContainer.clientHeight;
                 
                 // Calcola il numero di nodi orizzontali e verticali
                 const numCols = Math.floor(gridWidth / nodeSpacing) + 1;
                 const numRows = Math.floor(gridHeight / nodeSpacing) + 1;
-                
-                // Crea le linee orizzontali
-                for (let i = 0; i < numRows; i++) {
-                    const y = i * nodeSpacing;
-                    const line = document.createElement('div');
-                    line.className = 'grid-line horizontal-line';
-                    line.style.top = `${y}px`;
-                    nodeGrid.appendChild(line);
-                }
-                
-                // Crea le linee verticali
-                for (let i = 0; i < numCols; i++) {
-                    const x = i * nodeSpacing;
-                    const line = document.createElement('div');
-                    line.className = 'grid-line vertical-line';
-                    line.style.left = `${x}px`;
-                    nodeGrid.appendChild(line);
-                }
                 
                 // Crea i nodi
                 for (let i = 0; i < numRows; i++) {
@@ -169,9 +93,13 @@
                         node.style.top = `${y}px`;
                         
                         // Aggiungi un po' di casualità alla dimensione dei nodi
-                        const randomSize = 2 + Math.random() * 3;
+                        const randomSize = 1.5 + Math.random() * 2;
                         node.style.width = `${randomSize}px`;
                         node.style.height = `${randomSize}px`;
+                        
+                        // Aggiungi un po' di casualità all'opacità
+                        const randomOpacity = 0.3 + Math.random() * 0.7;
+                        node.style.backgroundColor = `rgba(92, 187, 246, ${randomOpacity})`;
                         
                         nodeGrid.appendChild(node);
                         
@@ -182,25 +110,15 @@
                             y: y,
                             size: randomSize
                         });
-                        
-                        nodeCount++;
                     }
                 }
-                
-                nodeCountEl.textContent = nodeCount;
             }
             
             // Funzione per gestire il movimento del mouse
             function handleMouseMove(e) {
-                const mouseX = e.clientX;
-                const mouseY = e.clientY;
-                
-                // Posiziona il magnifier
-                magnifier.style.left = `${mouseX}px`;
-                magnifier.style.top = `${mouseY}px`;
-                magnifier.style.display = 'block';
-                
-                let activeNodes = 0;
+                const rect = gridContainer.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
                 
                 // Aggiorna la posizione di ogni nodo
                 nodes.forEach(node => {
@@ -221,28 +139,21 @@
                         // Applica la trasformazione
                         node.element.style.transform = `translate(calc(-50% + ${translateX}px), calc(-50% + ${translateY}px)) scale(${scale})`;
                         node.element.classList.add('active');
-                        activeNodes++;
                     } else {
                         // Ripristina la posizione originale
                         node.element.style.transform = 'translate(-50%, -50%)';
                         node.element.classList.remove('active');
                     }
                 });
-                
-                activeCountEl.textContent = activeNodes;
             }
             
             // Funzione per gestire l'uscita del mouse
             function handleMouseLeave() {
-                magnifier.style.display = 'none';
-                
                 // Ripristina tutti i nodi
                 nodes.forEach(node => {
                     node.element.style.transform = 'translate(-50%, -50%)';
                     node.element.classList.remove('active');
                 });
-                
-                activeCountEl.textContent = 0;
             }
             
             // Crea la griglia iniziale
@@ -250,8 +161,8 @@
             
             // Aggiungi event listeners
             window.addEventListener('resize', createGrid);
-            document.addEventListener('mousemove', handleMouseMove);
-            document.addEventListener('mouseleave', handleMouseLeave);
+            gridContainer.addEventListener('mousemove', handleMouseMove);
+            gridContainer.addEventListener('mouseleave', handleMouseLeave);
         });
     </script>
 </body>
