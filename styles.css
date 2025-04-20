@@ -179,6 +179,29 @@ main {
     position: relative;
 }
 
+.service-label {
+    color: rgba(255, 255, 255, 0);
+    font-family: monospace;
+    font-size: 14px;
+    font-weight: bold;
+    text-align: center;
+    transition: all 0.3s ease;
+    padding: 5px 10px;
+    border-radius: 3px;
+    opacity: 0;
+    text-shadow: 0 0 5px rgba(98, 232, 132, 0); /* Verde (--highlight-color) per il glow iniziale (invisibile) */
+    letter-spacing: 1px;
+    pointer-events: none;
+}
+
+.service-cell:hover .service-label {
+    color: rgba(255, 255, 255, 0.95); /* Testo bianco più brillante */
+    background-color: rgba(24, 24, 37, 0.7);
+    opacity: 1;
+    text-shadow: 0 0 8px rgba(98, 232, 132, 0.7), /* Glow verde primario */
+                 0 0 12px rgba(98, 232, 132, 0.4); /* Glow verde secondario più diffuso */
+}
+
 /* Sezioni come blocchi di codice */
 section {
     margin-bottom: 40px;
