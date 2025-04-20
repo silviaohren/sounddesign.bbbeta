@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Illusion Grid</title>
+    <title>ASCII Wave Perturbation</title>
     <style>
         body, html {
             margin: 0;
@@ -15,225 +15,173 @@
             align-items: center;
             background-color: #1E1E2E;
             overflow: hidden;
+            font-family: monospace;
         }
         
-        .grid-container {
+        .wave-container {
             position: relative;
             width: 600px;
             height: 300px;
             border: 1px solid rgba(92, 187, 246, 0.2);
             overflow: hidden;
             background-color: rgba(24, 24, 37, 0.8);
+            cursor: pointer;
         }
         
-        .line-segment {
+        .wave-node {
             position: absolute;
-            background-color: rgba(92, 187, 246, 0.4);
-            transition: all 0.2s ease;
+            width: 1em;
+            height: 1em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: rgba(92, 187, 246, 0.7);
+            font-size: 12px;
+            transition: color 0.1s ease;
+            user-select: none;
         }
         
-        .horizontal-segment {
-            height: 1px;
-        }
-        
-        .vertical-segment {
-            width: 1px;
-        }
-        
-        .line-segment.active {
-            background-color: rgba(255, 95, 86, 0.8);
-            box-shadow: 0 0 4px rgba(255, 95, 86, 0.5);
-        }
+        .wave-node.active-1 { color: rgba(255, 95, 86, 0.9); }
+        .wave-node.active-2 { color: rgba(162, 119, 255, 0.9); }
+        .wave-node.active-3 { color: rgba(98, 232, 132, 0.9); }
     </style>
 </head>
 <body>
-    <div class="grid-container" id="gridContainer">
-        <!-- I segmenti di linea verranno generati via JavaScript -->
+    <div class="wave-container" id="waveContainer">
+        <!-- I nodi verranno generati via JavaScript -->
     </div>
     
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const gridContainer = document.getElementById('gridContainer');
+            const waveContainer = document.getElementById('waveContainer');
             
             // Configurazione
-            const lineSpacing = 20; // Spazio tra le linee
-            const segmentLength = 20; // Lunghezza di ogni segmento
-            const influenceRadius = 100; // Raggio di influenza del mouse
-            const maxDisplacement = 20; // Spostamento massimo
+            const nodeSpacing = 20; // Spazio tra i nodi
+            const waveSpeed = 100; // Velocità dell'onda (ms per unità di distanza)
+            const maxWaveRadius = 300; // Raggio massimo dell'onda
+            const waveIntensity = 3; // Numero di "creste" dell'onda
             
-            let horizontalSegments = [];
-            let verticalSegments = [];
+            // Caratteri ASCII per l'animazione
+            const asciiChars = [
+                '·', ':', '·', ':', '·', ':', '·', ':', '·', ':',
+                '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█', '▇', '▆', '▅', '▄', '▃', '▂', '▁',
+                '░', '▒', '▓', '█', '▓', '▒', '░',
+                '⠁', '⠉', '⠋', '⠛', '⠟', '⠿', '⠟', '⠛', '⠋', '⠉', '⠁',
+                '○', '◎', '●', '◎', '○'
+            ];
+            
+            let nodes = [];
+            let waveAnimations = [];
             let gridWidth, gridHeight;
             
-            // Funzione per creare la griglia
+            // Funzione per creare la griglia di nodi
             function createGrid() {
-                // Pulisci la griglia esistente
-                gridContainer.innerHTML = '';
-                horizontalSegments = [];
-                verticalSegments = [];
+                // Pulisci il contenitore
+                waveContainer.innerHTML = '';
+                nodes = [];
                 
                 // Ottieni le dimensioni del contenitore
-                gridWidth = gridContainer.clientWidth;
-                gridHeight = gridContainer.clientHeight;
+                gridWidth = waveContainer.clientWidth;
+                gridHeight = waveContainer.clientHeight;
                 
-                // Calcola il numero di linee orizzontali e verticali
-                const numHorizontalLines = Math.floor(gridHeight / lineSpacing) + 1;
-                const numVerticalLines = Math.floor(gridWidth / lineSpacing) + 1;
+                // Calcola il numero di nodi orizzontali e verticali
+                const numCols = Math.floor(gridWidth / nodeSpacing);
+                const numRows = Math.floor(gridHeight / nodeSpacing);
                 
-                // Crea i segmenti orizzontali
-                for (let i = 0; i < numHorizontalLines; i++) {
-                    const y = i * lineSpacing;
-                    const lineSegments = [];
-                    
-                    // Dividi ogni linea in segmenti
-                    for (let x = 0; x < gridWidth; x += segmentLength) {
-                        const segment = document.createElement('div');
-                        segment.className = 'line-segment horizontal-segment';
-                        segment.style.left = `${x}px`;
-                        segment.style.top = `${y}px`;
-                        segment.style.width = `${Math.min(segmentLength, gridWidth - x)}px`;
+                // Crea i nodi
+                for (let i = 0; i < numRows; i++) {
+                    for (let j = 0; j < numCols; j++) {
+                        const x = j * nodeSpacing + nodeSpacing / 2;
+                        const y = i * nodeSpacing + nodeSpacing / 2;
                         
-                        gridContainer.appendChild(segment);
+                        const node = document.createElement('div');
+                        node.className = 'wave-node';
+                        node.style.left = `${x}px`;
+                        node.style.top = `${y}px`;
                         
-                        lineSegments.push({
-                            element: segment,
-                            x: x + segmentLength / 2, // centro del segmento
-                            y: y,
-                            width: Math.min(segmentLength, gridWidth - x),
-                            originalY: y
-                        });
-                    }
-                    
-                    horizontalSegments.push(lineSegments);
-                }
-                
-                // Crea i segmenti verticali
-                for (let i = 0; i < numVerticalLines; i++) {
-                    const x = i * lineSpacing;
-                    const lineSegments = [];
-                    
-                    // Dividi ogni linea in segmenti
-                    for (let y = 0; y < gridHeight; y += segmentLength) {
-                        const segment = document.createElement('div');
-                        segment.className = 'line-segment vertical-segment';
-                        segment.style.left = `${x}px`;
-                        segment.style.top = `${y}px`;
-                        segment.style.height = `${Math.min(segmentLength, gridHeight - y)}px`;
+                        // Assegna un carattere ASCII casuale
+                        const charIndex = Math.floor(Math.random() * asciiChars.length);
+                        node.textContent = asciiChars[charIndex];
                         
-                        gridContainer.appendChild(segment);
+                        waveContainer.appendChild(node);
                         
-                        lineSegments.push({
-                            element: segment,
+                        nodes.push({
+                            element: node,
                             x: x,
-                            y: y + segmentLength / 2, // centro del segmento
-                            height: Math.min(segmentLength, gridHeight - y),
-                            originalX: x
+                            y: y,
+                            originalChar: node.textContent,
+                            charIndex: charIndex
                         });
                     }
-                    
-                    verticalSegments.push(lineSegments);
                 }
             }
             
-            // Funzione per calcolare lo spostamento basato sulla distanza
-            function calculateDisplacement(distance) {
-                if (distance >= influenceRadius) return 0;
+            // Funzione per creare un'onda
+            function createWave(centerX, centerY) {
+                // Cancella le animazioni precedenti
+                waveAnimations.forEach(animation => clearTimeout(animation));
+                waveAnimations = [];
                 
-                // Formula per creare un effetto a cupola
-                const normalizedDistance = distance / influenceRadius;
-                return maxDisplacement * Math.cos(normalizedDistance * Math.PI / 2);
+                // Resetta tutti i nodi
+                nodes.forEach(node => {
+                    node.element.className = 'wave-node';
+                    node.element.textContent = node.originalChar;
+                });
+                
+                // Calcola la distanza di ogni nodo dal centro
+                nodes.forEach(node => {
+                    const dx = node.x - centerX;
+                    const dy = node.y - centerY;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    // Se il nodo è all'interno del raggio massimo dell'onda
+                    if (distance <= maxWaveRadius) {
+                        // Calcola il ritardo in base alla distanza
+                        const delay = distance * waveSpeed / 100;
+                        
+                        // Crea l'animazione per questo nodo
+                        const animation = setTimeout(() => {
+                            // Calcola l'intensità dell'onda in questo punto
+                            const wavePhase = (distance / 30) * Math.PI * waveIntensity;
+                            const amplitude = Math.cos(wavePhase) * Math.max(0, 1 - distance / maxWaveRadius);
+                            
+                            // Cambia il carattere in base all'ampiezza
+                            if (Math.abs(amplitude) > 0.7) {
+                                node.element.className = 'wave-node active-1';
+                                node.element.textContent = asciiChars[(node.charIndex + 15) % asciiChars.length];
+                            } else if (Math.abs(amplitude) > 0.4) {
+                                node.element.className = 'wave-node active-2';
+                                node.element.textContent = asciiChars[(node.charIndex + 10) % asciiChars.length];
+                            } else if (Math.abs(amplitude) > 0.1) {
+                                node.element.className = 'wave-node active-3';
+                                node.element.textContent = asciiChars[(node.charIndex + 5) % asciiChars.length];
+                            }
+                            
+                            // Ripristina il nodo dopo un po'
+                            setTimeout(() => {
+                                node.element.className = 'wave-node';
+                                node.element.textContent = node.originalChar;
+                            }, 300);
+                        }, delay);
+                        
+                        waveAnimations.push(animation);
+                    }
+                });
             }
             
-            // Funzione per deformare la griglia
-            function deformGrid(mouseX, mouseY) {
-                // Deforma i segmenti orizzontali
-                horizontalSegments.forEach(lineSegments => {
-                    lineSegments.forEach(segment => {
-                        const dx = mouseX - segment.x;
-                        const dy = mouseY - segment.y;
-                        const distance = Math.sqrt(dx * dx + dy * dy);
-                        
-                        if (distance < influenceRadius) {
-                            // Calcola lo spostamento verticale (effetto 3D)
-                            const displacement = calculateDisplacement(distance);
-                            
-                            // Applica lo spostamento
-                            segment.element.style.transform = `translateY(${-displacement}px)`;
-                            
-                            // Cambia l'opacità e il colore in base alla distanza
-                            const opacity = 0.4 + 0.6 * (1 - distance / influenceRadius);
-                            const r = Math.min(255, 92 + 163 * (1 - distance / influenceRadius));
-                            const g = Math.min(255, 187 - 92 * (1 - distance / influenceRadius));
-                            const b = Math.min(255, 246 - 160 * (1 - distance / influenceRadius));
-                            
-                            segment.element.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${opacity})`;
-                            segment.element.classList.add('active');
-                        } else {
-                            segment.element.style.transform = '';
-                            segment.element.style.backgroundColor = '';
-                            segment.element.classList.remove('active');
-                        }
-                    });
-                });
+            // Funzione per gestire il click
+            function handleClick(e) {
+                const rect = waveContainer.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const clickY = e.clientY - rect.top;
                 
-                // Deforma i segmenti verticali
-                verticalSegments.forEach(lineSegments => {
-                    lineSegments.forEach(segment => {
-                        const dx = mouseX - segment.x;
-                        const dy = mouseY - segment.y;
-                        const distance = Math.sqrt(dx * dx + dy * dy);
-                        
-                        if (distance < influenceRadius) {
-                            // Calcola lo spostamento orizzontale (effetto 3D)
-                            const displacement = calculateDisplacement(distance);
-                            
-                            // Applica lo spostamento
-                            segment.element.style.transform = `translateX(${-displacement}px)`;
-                            
-                            // Cambia l'opacità e il colore in base alla distanza
-                            const opacity = 0.4 + 0.6 * (1 - distance / influenceRadius);
-                            const r = Math.min(255, 92 + 163 * (1 - distance / influenceRadius));
-                            const g = Math.min(255, 187 - 92 * (1 - distance / influenceRadius));
-                            const b = Math.min(255, 246 - 160 * (1 - distance / influenceRadius));
-                            
-                            segment.element.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${opacity})`;
-                            segment.element.classList.add('active');
-                        } else {
-                            segment.element.style.transform = '';
-                            segment.element.style.backgroundColor = '';
-                            segment.element.classList.remove('active');
-                        }
-                    });
-                });
+                createWave(clickX, clickY);
             }
             
             // Funzione per gestire il movimento del mouse
             function handleMouseMove(e) {
-                const rect = gridContainer.getBoundingClientRect();
-                const mouseX = e.clientX - rect.left;
-                const mouseY = e.clientY - rect.top;
-                
-                deformGrid(mouseX, mouseY);
-            }
-            
-            // Funzione per gestire l'uscita del mouse
-            function handleMouseLeave() {
-                // Resetta tutti i segmenti
-                horizontalSegments.forEach(lineSegments => {
-                    lineSegments.forEach(segment => {
-                        segment.element.style.transform = '';
-                        segment.element.style.backgroundColor = '';
-                        segment.element.classList.remove('active');
-                    });
-                });
-                
-                verticalSegments.forEach(lineSegments => {
-                    lineSegments.forEach(segment => {
-                        segment.element.style.transform = '';
-                        segment.element.style.backgroundColor = '';
-                        segment.element.classList.remove('active');
-                    });
-                });
+                // Implementazione opzionale per creare onde al movimento del mouse
+                // Disattivato per default per evitare troppe animazioni
             }
             
             // Crea la griglia iniziale
@@ -241,8 +189,20 @@
             
             // Aggiungi event listeners
             window.addEventListener('resize', createGrid);
-            gridContainer.addEventListener('mousemove', handleMouseMove);
-            gridContainer.addEventListener('mouseleave', handleMouseLeave);
+            waveContainer.addEventListener('click', handleClick);
+            // waveContainer.addEventListener('mousemove', handleMouseMove); // Opzionale
+            
+            // Crea un'onda iniziale al centro
+            setTimeout(() => {
+                createWave(gridWidth / 2, gridHeight / 2);
+            }, 500);
+            
+            // Crea onde casuali periodicamente
+            setInterval(() => {
+                const randomX = Math.random() * gridWidth;
+                const randomY = Math.random() * gridHeight;
+                createWave(randomX, randomY);
+            }, 5000);
         });
     </script>
 </body>
