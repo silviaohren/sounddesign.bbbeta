@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enhanced 3D Spherical Grid</title>
+    <title>Magnetic Field Grid</title>
     <style>
         body, html {
             margin: 0;
@@ -14,7 +14,6 @@
             justify-content: center;
             align-items: center;
             background-color: #1E1E2E;
-            perspective: 800px;
             overflow: hidden;
         }
         
@@ -25,54 +24,46 @@
             border: 1px solid rgba(92, 187, 246, 0.2);
             overflow: hidden;
             background-color: rgba(24, 24, 37, 0.8);
-            transform-style: preserve-3d;
-            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
         }
         
         .grid-line {
             position: absolute;
             background-color: rgba(92, 187, 246, 0.3);
-            transition: transform 0.2s ease, background-color 0.2s ease;
-            transform-style: preserve-3d;
+            transition: transform 0.3s ease;
         }
         
         .horizontal-line {
             width: 100%;
             height: 1px;
+            left: 0;
         }
         
         .vertical-line {
             width: 1px;
             height: 100%;
+            top: 0;
         }
         
-        .grid-line.active {
-            background-color: rgba(255, 95, 86, 0.6);
-            box-shadow: 0 0 5px rgba(255, 95, 86, 0.3);
-        }
-        
-        .grid-segment {
+        .intersection-point {
             position: absolute;
-            transition: all 0.2s ease;
-            transform-style: preserve-3d;
+            width: 4px;
+            height: 4px;
+            background-color: transparent;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 2;
         }
         
-        .horizontal-segment {
-            height: 1px;
-        }
-        
-        .vertical-segment {
-            width: 1px;
-        }
-        
-        .grid-segment.elevated {
-            box-shadow: 0 0 8px rgba(255, 95, 86, 0.7);
+        .intersection-point.active {
+            background-color: rgba(255, 95, 86, 0.7);
+            box-shadow: 0 0 8px rgba(255, 95, 86, 0.5);
         }
     </style>
 </head>
 <body>
     <div class="grid-container" id="gridContainer">
-        <!-- Le linee e i segmenti verranno generati via JavaScript -->
+        <!-- Le linee verranno generate via JavaScript -->
     </div>
     
     <script>
@@ -80,16 +71,15 @@
             const gridContainer = document.getElementById('gridContainer');
             
             // Configurazione
-            const lineSpacing = 15; // Spazio tra le linee (ridotto per maggiore densità)
-            const influenceRadius = 100; // Raggio di influenza del mouse (aumentato)
-            const maxElevation = 60; // Elevazione massima in pixel (asse Z) (aumentata)
-            const segmentsPerLine = 40; // Numero di segmenti per linea (aumentato)
-            const maxLineThickness = 4; // Spessore massimo delle linee (nuovo)
+            const lineSpacing = 20; // Spazio tra le linee
+            const fieldRadius = 150; // Raggio del campo magnetico
+            const maxDisplacement = 15; // Spostamento massimo delle linee
+            const fieldStrength = 1.5; // Forza del campo (1 = normale, >1 = più forte)
             
             let horizontalLines = [];
             let verticalLines = [];
+            let intersectionPoints = [];
             let gridWidth, gridHeight;
-            let isMouseOver = false;
             
             // Funzione per creare la griglia
             function createGrid() {
@@ -97,6 +87,7 @@
                 gridContainer.innerHTML = '';
                 horizontalLines = [];
                 verticalLines = [];
+                intersectionPoints = [];
                 
                 // Ottieni le dimensioni del contenitore
                 gridWidth = gridContainer.clientWidth;
@@ -106,193 +97,152 @@
                 const numHorizontalLines = Math.floor(gridHeight / lineSpacing) + 1;
                 const numVerticalLines = Math.floor(gridWidth / lineSpacing) + 1;
                 
-                // Crea le linee orizzontali e i loro segmenti
+                // Crea le linee orizzontali
                 for (let i = 0; i < numHorizontalLines; i++) {
                     const y = i * lineSpacing;
-                    const lineContainer = document.createElement('div');
-                    lineContainer.className = 'grid-line horizontal-line';
-                    lineContainer.style.top = `${y}px`;
                     
-                    const segments = [];
-                    const segmentWidth = gridWidth / segmentsPerLine;
+                    const line = document.createElement('div');
+                    line.className = 'grid-line horizontal-line';
+                    line.style.top = `${y}px`;
                     
-                    for (let j = 0; j < segmentsPerLine; j++) {
-                        const segment = document.createElement('div');
-                        segment.className = 'grid-segment horizontal-segment';
-                        segment.style.width = `${segmentWidth}px`;
-                        segment.style.left = `${j * segmentWidth}px`;
-                        segment.style.top = '0';
-                        segment.style.backgroundColor = 'rgba(92, 187, 246, 0.3)';
+                    gridContainer.appendChild(line);
+                    
+                    horizontalLines.push({
+                        element: line,
+                        y: y,
+                        originalY: y
+                    });
+                }
+                
+                // Crea le linee verticali
+                for (let i = 0; i < numVerticalLines; i++) {
+                    const x = i * lineSpacing;
+                    
+                    const line = document.createElement('div');
+                    line.className = 'grid-line vertical-line';
+                    line.style.left = `${x}px`;
+                    
+                    gridContainer.appendChild(line);
+                    
+                    verticalLines.push({
+                        element: line,
+                        x: x,
+                        originalX: x
+                    });
+                }
+                
+                // Crea i punti di intersezione
+                for (let i = 0; i < numHorizontalLines; i++) {
+                    for (let j = 0; j < numVerticalLines; j++) {
+                        const x = j * lineSpacing;
+                        const y = i * lineSpacing;
                         
-                        lineContainer.appendChild(segment);
+                        const point = document.createElement('div');
+                        point.className = 'intersection-point';
+                        point.style.left = `${x}px`;
+                        point.style.top = `${y}px`;
                         
-                        segments.push({
-                            element: segment,
-                            x: j * segmentWidth + segmentWidth / 2,
+                        gridContainer.appendChild(point);
+                        
+                        intersectionPoints.push({
+                            element: point,
+                            x: x,
                             y: y,
-                            width: segmentWidth,
+                            originalX: x,
                             originalY: y
                         });
                     }
-                    
-                    gridContainer.appendChild(lineContainer);
-                    
-                    horizontalLines.push({
-                        element: lineContainer,
-                        y: y,
-                        segments: segments
-                    });
-                }
-                
-                // Crea le linee verticali e i loro segmenti
-                for (let i = 0; i < numVerticalLines; i++) {
-                    const x = i * lineSpacing;
-                    const lineContainer = document.createElement('div');
-                    lineContainer.className = 'grid-line vertical-line';
-                    lineContainer.style.left = `${x}px`;
-                    
-                    const segments = [];
-                    const segmentHeight = gridHeight / segmentsPerLine;
-                    
-                    for (let j = 0; j < segmentsPerLine; j++) {
-                        const segment = document.createElement('div');
-                        segment.className = 'grid-segment vertical-segment';
-                        segment.style.height = `${segmentHeight}px`;
-                        segment.style.top = `${j * segmentHeight}px`;
-                        segment.style.left = '0';
-                        segment.style.backgroundColor = 'rgba(92, 187, 246, 0.3)';
-                        
-                        lineContainer.appendChild(segment);
-                        
-                        segments.push({
-                            element: segment,
-                            x: x,
-                            y: j * segmentHeight + segmentHeight / 2,
-                            height: segmentHeight,
-                            originalX: x
-                        });
-                    }
-                    
-                    gridContainer.appendChild(lineContainer);
-                    
-                    verticalLines.push({
-                        element: lineContainer,
-                        x: x,
-                        segments: segments
-                    });
                 }
             }
             
-            // Funzione per calcolare l'elevazione sferica esagerata
-            function calculateSphericalElevation(dx, dy, distance, radius) {
-                if (distance >= radius) return 0;
+            // Funzione per calcolare l'effetto del campo magnetico
+            function calculateMagneticEffect(dx, dy, distance) {
+                if (distance >= fieldRadius) return { x: 0, y: 0 };
                 
-                // Formula migliorata per una superficie sferica più esagerata
-                const normalizedDistance = distance / radius;
-                // Utilizziamo una funzione coseno modificata per un effetto più pronunciato
-                const elevationFactor = Math.pow(Math.cos(normalizedDistance * Math.PI / 2), 1.5);
-                return maxElevation * elevationFactor;
+                // Calcola la forza del campo in base alla distanza
+                // Più vicino = più forte, con una curva non lineare
+                const normalizedDistance = distance / fieldRadius;
+                const fieldEffect = Math.pow(1 - normalizedDistance, fieldStrength);
+                
+                // Calcola la direzione del campo (vettore normalizzato)
+                const length = Math.sqrt(dx * dx + dy * dy);
+                const dirX = dx / length;
+                const dirY = dy / length;
+                
+                // Calcola lo spostamento
+                // Usiamo una funzione sinusoidale per creare un effetto ondulatorio
+                const displacement = maxDisplacement * fieldEffect;
+                
+                // Restituisci lo spostamento nelle direzioni x e y
+                return {
+                    x: dirX * displacement,
+                    y: dirY * displacement
+                };
             }
             
-            // Funzione per calcolare lo spessore della linea in base all'elevazione
-            function calculateLineThickness(elevation) {
-                // Spessore proporzionale all'elevazione
-                return 1 + (maxLineThickness - 1) * (elevation / maxElevation);
-            }
-            
-            // Funzione per deformare le linee in modo sferico esagerato
-            function deformLines(mouseX, mouseY) {
-                // Resetta tutte le linee se il mouse non è sopra il contenitore
-                if (!isMouseOver) {
-                    handleMouseLeave();
-                    return;
-                }
+            // Funzione per applicare l'effetto del campo magnetico
+            function applyMagneticField(mouseX, mouseY) {
+                // Resetta tutti i punti di intersezione
+                intersectionPoints.forEach(point => {
+                    point.element.classList.remove('active');
+                });
                 
-                // Deforma i segmenti orizzontali
-                horizontalLines.forEach(line => {
-                    let isLineActive = false;
+                // Calcola l'effetto del campo su ogni punto di intersezione
+                intersectionPoints.forEach(point => {
+                    const dx = mouseX - point.x;
+                    const dy = mouseY - point.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
                     
-                    line.segments.forEach(segment => {
-                        const dx = mouseX - segment.x;
-                        const dy = mouseY - segment.y;
-                        const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance < fieldRadius) {
+                        const effect = calculateMagneticEffect(dx, dy, distance);
                         
-                        if (distance < influenceRadius) {
-                            const elevation = calculateSphericalElevation(dx, dy, distance, influenceRadius);
-                            const thickness = calculateLineThickness(elevation);
-                            
-                            // Applica la trasformazione 3D con spessore aumentato
-                            segment.element.style.transform = `translateZ(${elevation}px)`;
-                            segment.element.style.height = `${thickness}px`;
-                            segment.element.style.marginTop = `-${(thickness-1)/2}px`; // Centra la linea più spessa
-                            
-                            // Colore più intenso e luminoso
-                            const opacity = 0.3 + 0.7 * (elevation/maxElevation);
-                            const r = Math.min(255, 92 + 163 * (elevation/maxElevation));
-                            const g = Math.min(255, 187 - 92 * (elevation/maxElevation));
-                            const b = Math.min(255, 246 - 160 * (elevation/maxElevation));
-                            
-                            segment.element.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${opacity})`;
-                            segment.element.classList.add('elevated');
-                            
-                            isLineActive = true;
-                        } else {
-                            segment.element.style.transform = 'translateZ(0)';
-                            segment.element.style.height = '1px';
-                            segment.element.style.marginTop = '0';
-                            segment.element.style.backgroundColor = 'rgba(92, 187, 246, 0.3)';
-                            segment.element.classList.remove('elevated');
+                        // Applica l'effetto
+                        point.currentX = point.originalX + effect.x;
+                        point.currentY = point.originalY + effect.y;
+                        
+                        // Evidenzia i punti più influenzati
+                        if (distance < fieldRadius * 0.3) {
+                            point.element.classList.add('active');
                         }
-                    });
-                    
-                    if (isLineActive) {
-                        line.element.classList.add('active');
                     } else {
-                        line.element.classList.remove('active');
+                        point.currentX = point.originalX;
+                        point.currentY = point.originalY;
                     }
                 });
                 
-                // Deforma i segmenti verticali
-                verticalLines.forEach(line => {
-                    let isLineActive = false;
+                // Deforma le linee orizzontali in base ai punti di intersezione
+                horizontalLines.forEach((line, lineIndex) => {
+                    // Trova tutti i punti su questa linea
+                    const pointsOnLine = intersectionPoints.filter(p => 
+                        Math.abs(p.originalY - line.y) < 0.1
+                    );
                     
-                    line.segments.forEach(segment => {
-                        const dx = mouseX - segment.x;
-                        const dy = mouseY - segment.y;
-                        const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (pointsOnLine.length > 0) {
+                        // Crea una curva basata sui punti deformati
+                        const pathPoints = pointsOnLine.map(p => 
+                            `${p.currentX}px ${p.currentY}px`
+                        ).join(', ');
                         
-                        if (distance < influenceRadius) {
-                            const elevation = calculateSphericalElevation(dx, dy, distance, influenceRadius);
-                            const thickness = calculateLineThickness(elevation);
-                            
-                            // Applica la trasformazione 3D con spessore aumentato
-                            segment.element.style.transform = `translateZ(${elevation}px)`;
-                            segment.element.style.width = `${thickness}px`;
-                            segment.element.style.marginLeft = `-${(thickness-1)/2}px`; // Centra la linea più spessa
-                            
-                            // Colore più intenso e luminoso
-                            const opacity = 0.3 + 0.7 * (elevation/maxElevation);
-                            const r = Math.min(255, 92 + 163 * (elevation/maxElevation));
-                            const g = Math.min(255, 187 - 92 * (elevation/maxElevation));
-                            const b = Math.min(255, 246 - 160 * (elevation/maxElevation));
-                            
-                            segment.element.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${opacity})`;
-                            segment.element.classList.add('elevated');
-                            
-                            isLineActive = true;
-                        } else {
-                            segment.element.style.transform = 'translateZ(0)';
-                            segment.element.style.width = '1px';
-                            segment.element.style.marginLeft = '0';
-                            segment.element.style.backgroundColor = 'rgba(92, 187, 246, 0.3)';
-                            segment.element.classList.remove('elevated');
-                        }
-                    });
+                        // Applica la deformazione usando clip-path
+                        line.element.style.clipPath = `polygon(0px ${line.y}px, ${pathPoints}, ${gridWidth}px ${line.y}px)`;
+                    }
+                });
+                
+                // Deforma le linee verticali in base ai punti di intersezione
+                verticalLines.forEach((line, lineIndex) => {
+                    // Trova tutti i punti su questa linea
+                    const pointsOnLine = intersectionPoints.filter(p => 
+                        Math.abs(p.originalX - line.x) < 0.1
+                    );
                     
-                    if (isLineActive) {
-                        line.element.classList.add('active');
-                    } else {
-                        line.element.classList.remove('active');
+                    if (pointsOnLine.length > 0) {
+                        // Crea una curva basata sui punti deformati
+                        const pathPoints = pointsOnLine.map(p => 
+                            `${p.currentX}px ${p.currentY}px`
+                        ).join(', ');
+                        
+                        // Applica la deformazione usando clip-path
+                        line.element.style.clipPath = `polygon(${line.x}px 0px, ${pathPoints}, ${line.x}px ${gridHeight}px)`;
                     }
                 });
             }
@@ -303,62 +253,24 @@
                 const mouseX = e.clientX - rect.left;
                 const mouseY = e.clientY - rect.top;
                 
-                isMouseOver = true;
-                deformLines(mouseX, mouseY);
-            }
-            
-            // Funzione per gestire l'entrata del mouse
-            function handleMouseEnter() {
-                isMouseOver = true;
+                applyMagneticField(mouseX, mouseY);
             }
             
             // Funzione per gestire l'uscita del mouse
             function handleMouseLeave() {
-                isMouseOver = false;
-                
-                // Resetta tutti i segmenti
+                // Resetta tutte le linee
                 horizontalLines.forEach(line => {
-                    line.element.classList.remove('active');
-                    line.segments.forEach(segment => {
-                        segment.element.style.transform = 'translateZ(0)';
-                        segment.element.style.height = '1px';
-                        segment.element.style.marginTop = '0';
-                        segment.element.style.backgroundColor = 'rgba(92, 187, 246, 0.3)';
-                        segment.element.classList.remove('elevated');
-                    });
+                    line.element.style.clipPath = '';
                 });
                 
                 verticalLines.forEach(line => {
-                    line.element.classList.remove('active');
-                    line.segments.forEach(segment => {
-                        segment.element.style.transform = 'translateZ(0)';
-                        segment.element.style.width = '1px';
-                        segment.element.style.marginLeft = '0';
-                        segment.element.style.backgroundColor = 'rgba(92, 187, 246, 0.3)';
-                        segment.element.classList.remove('elevated');
-                    });
+                    line.element.style.clipPath = '';
                 });
-            }
-            
-            // Aggiungi animazione pulsante quando non c'è interazione
-            function addPulseAnimation() {
-                let time = 0;
-                const centerX = gridWidth / 2;
-                const centerY = gridHeight / 2;
                 
-                function pulse() {
-                    if (!isMouseOver) {
-                        time += 0.02;
-                        const pulseX = centerX + Math.sin(time) * 50;
-                        const pulseY = centerY + Math.cos(time * 0.7) * 30;
-                        
-                        deformLines(pulseX, pulseY);
-                    }
-                    
-                    requestAnimationFrame(pulse);
-                }
-                
-                pulse();
+                // Resetta tutti i punti
+                intersectionPoints.forEach(point => {
+                    point.element.classList.remove('active');
+                });
             }
             
             // Crea la griglia iniziale
@@ -367,11 +279,7 @@
             // Aggiungi event listeners
             window.addEventListener('resize', createGrid);
             gridContainer.addEventListener('mousemove', handleMouseMove);
-            gridContainer.addEventListener('mouseenter', handleMouseEnter);
             gridContainer.addEventListener('mouseleave', handleMouseLeave);
-            
-            // Aggiungi animazione pulsante
-            addPulseAnimation();
         });
     </script>
 </body>
