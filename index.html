@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive ASCII Wave</title>
+    <title>Interactive ASCII Wave with Services</title>
     <style>
         body, html {
             margin: 0;
@@ -39,6 +39,7 @@
             font-size: 12px;
             transition: color 0.1s ease;
             user-select: none;
+            z-index: 1;
         }
         
         .wave-node.active-1 { color: rgba(255, 95, 86, 0.9); }
@@ -56,18 +57,91 @@
             z-index: 100;
             box-shadow: 0 0 10px rgba(255, 95, 86, 0.5);
         }
+        
+        .service-grid {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            z-index: 2;
+        }
+        
+        .service-cell {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .service-label {
+            color: rgba(255, 255, 255, 0);
+            font-family: monospace;
+            font-size: 14px;
+            font-weight: bold;
+            text-align: center;
+            transition: all 0.3s ease;
+            padding: 5px 10px;
+            border-radius: 3px;
+            opacity: 0;
+            text-shadow: 0 0 5px rgba(255, 95, 86, 0);
+            letter-spacing: 1px;
+            pointer-events: none;
+        }
+        
+        .service-cell:hover .service-label {
+            color: rgba(255, 255, 255, 0.9);
+            background-color: rgba(24, 24, 37, 0.7);
+            opacity: 1;
+            text-shadow: 0 0 5px rgba(255, 95, 86, 0.5);
+        }
     </style>
 </head>
 <body>
     <div class="wave-container" id="waveContainer">
         <!-- I nodi verranno generati via JavaScript -->
         <div class="mouse-cursor" id="mouseCursor"></div>
+        
+        <!-- Griglia di servizi -->
+        <div class="service-grid">
+            <div class="service-cell">
+                <div class="service-label">DIALOGUE EDITING</div>
+            </div>
+            <div class="service-cell">
+                <div class="service-label"></div>
+            </div>
+            <div class="service-cell">
+                <div class="service-label">LOCATION SOUND</div>
+            </div>
+            <div class="service-cell">
+                <div class="service-label"></div>
+            </div>
+            <div class="service-cell">
+                <div class="service-label">SOUND DESIGN</div>
+            </div>
+            <div class="service-cell">
+                <div class="service-label"></div>
+            </div>
+            <div class="service-cell">
+                <div class="service-label">MUSIC EDITING</div>
+            </div>
+            <div class="service-cell">
+                <div class="service-label"></div>
+            </div>
+            <div class="service-cell">
+                <div class="service-label">SOUND RESTORATION</div>
+            </div>
+        </div>
     </div>
     
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const waveContainer = document.getElementById('waveContainer');
             const mouseCursor = document.getElementById('mouseCursor');
+            const serviceCells = document.querySelectorAll('.service-cell');
             
             // Configurazione
             const nodeSpacing = 20; // Spazio tra i nodi
@@ -95,9 +169,10 @@
             
             // Funzione per creare la griglia di nodi
             function createGrid() {
-                // Pulisci il contenitore
-                waveContainer.innerHTML = '';
-                waveContainer.appendChild(mouseCursor); // Rimetti il cursore
+                // Rimuovi i nodi esistenti ma mantieni gli altri elementi
+                const nodesToRemove = document.querySelectorAll('.wave-node');
+                nodesToRemove.forEach(node => node.remove());
+                
                 nodes = [];
                 
                 // Ottieni le dimensioni del contenitore
@@ -211,6 +286,9 @@
                         }
                     }, wavePause);
                 }
+                
+                // Mostra il cursore personalizzato
+                mouseCursor.style.display = 'block';
             }
             
             // Funzione per gestire l'uscita del mouse
@@ -241,11 +319,6 @@
             
             // Nascondi inizialmente il cursore personalizzato
             mouseCursor.style.display = 'none';
-            
-            // Mostra il cursore personalizzato quando il mouse entra
-            waveContainer.addEventListener('mouseenter', () => {
-                mouseCursor.style.display = 'block';
-            });
         });
     </script>
 </body>
