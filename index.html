@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive Line Grid</title>
+    <title>3D Spherical Grid Deformation</title>
     <style>
         body, html {
             margin: 0;
@@ -14,6 +14,7 @@
             justify-content: center;
             align-items: center;
             background-color: #1E1E2E;
+            perspective: 1000px;
         }
         
         .grid-container {
@@ -23,24 +24,24 @@
             border: 1px solid rgba(92, 187, 246, 0.2);
             overflow: hidden;
             background-color: rgba(24, 24, 37, 0.8);
+            transform-style: preserve-3d;
         }
         
         .grid-line {
             position: absolute;
             background-color: rgba(92, 187, 246, 0.3);
             transition: transform 0.2s ease, background-color 0.2s ease;
+            transform-style: preserve-3d;
         }
         
         .horizontal-line {
             width: 100%;
             height: 1px;
-            transform-origin: left;
         }
         
         .vertical-line {
             width: 1px;
             height: 100%;
-            transform-origin: top;
         }
         
         .grid-line.active {
@@ -48,18 +49,25 @@
             box-shadow: 0 0 5px rgba(255, 95, 86, 0.3);
         }
         
-        .intersection-point {
+        .grid-segment {
             position: absolute;
-            width: 1px;
+            background-color: inherit;
+            transition: transform 0.2s ease, background-color 0.2s ease;
+            transform-style: preserve-3d;
+        }
+        
+        .horizontal-segment {
             height: 1px;
-            opacity: 0;
-            pointer-events: none;
+        }
+        
+        .vertical-segment {
+            width: 1px;
         }
     </style>
 </head>
 <body>
     <div class="grid-container" id="gridContainer">
-        <!-- Le linee e i punti di intersezione verranno generati via JavaScript -->
+        <!-- Le linee e i segmenti verranno generati via JavaScript -->
     </div>
     
     <script>
@@ -68,12 +76,12 @@
             
             // Configurazione
             const lineSpacing = 20; // Spazio tra le linee
-            const influenceRadius = 60; // Raggio di influenza del mouse
-            const maxDeformation = 15; // Deformazione massima delle linee
+            const influenceRadius = 80; // Raggio di influenza del mouse
+            const maxElevation = 30; // Elevazione massima in pixel (asse Z)
+            const segmentsPerLine = 30; // Numero di segmenti per linea
             
             let horizontalLines = [];
             let verticalLines = [];
-            let intersectionPoints = [];
             let gridWidth, gridHeight;
             
             // Funzione per creare la griglia
@@ -82,7 +90,6 @@
                 gridContainer.innerHTML = '';
                 horizontalLines = [];
                 verticalLines = [];
-                intersectionPoints = [];
                 
                 // Ottieni le dimensioni del contenitore
                 gridWidth = gridContainer.clientWidth;
@@ -92,120 +99,154 @@
                 const numHorizontalLines = Math.floor(gridHeight / lineSpacing) + 1;
                 const numVerticalLines = Math.floor(gridWidth / lineSpacing) + 1;
                 
-                // Crea le linee orizzontali
+                // Crea le linee orizzontali e i loro segmenti
                 for (let i = 0; i < numHorizontalLines; i++) {
                     const y = i * lineSpacing;
+                    const lineContainer = document.createElement('div');
+                    lineContainer.className = 'grid-line horizontal-line';
+                    lineContainer.style.top = `${y}px`;
                     
-                    const line = document.createElement('div');
-                    line.className = 'grid-line horizontal-line';
-                    line.style.top = `${y}px`;
+                    const segments = [];
+                    const segmentWidth = gridWidth / segmentsPerLine;
                     
-                    gridContainer.appendChild(line);
+                    for (let j = 0; j < segmentsPerLine; j++) {
+                        const segment = document.createElement('div');
+                        segment.className = 'grid-segment horizontal-segment';
+                        segment.style.width = `${segmentWidth}px`;
+                        segment.style.left = `${j * segmentWidth}px`;
+                        segment.style.top = '0';
+                        
+                        lineContainer.appendChild(segment);
+                        
+                        segments.push({
+                            element: segment,
+                            x: j * segmentWidth + segmentWidth / 2,
+                            y: y,
+                            width: segmentWidth
+                        });
+                    }
+                    
+                    gridContainer.appendChild(lineContainer);
                     
                     horizontalLines.push({
-                        element: line,
+                        element: lineContainer,
                         y: y,
-                        points: [] // Punti di controllo per la deformazione
+                        segments: segments
                     });
                 }
                 
-                // Crea le linee verticali
+                // Crea le linee verticali e i loro segmenti
                 for (let i = 0; i < numVerticalLines; i++) {
                     const x = i * lineSpacing;
+                    const lineContainer = document.createElement('div');
+                    lineContainer.className = 'grid-line vertical-line';
+                    lineContainer.style.left = `${x}px`;
                     
-                    const line = document.createElement('div');
-                    line.className = 'grid-line vertical-line';
-                    line.style.left = `${x}px`;
+                    const segments = [];
+                    const segmentHeight = gridHeight / segmentsPerLine;
                     
-                    gridContainer.appendChild(line);
+                    for (let j = 0; j < segmentsPerLine; j++) {
+                        const segment = document.createElement('div');
+                        segment.className = 'grid-segment vertical-segment';
+                        segment.style.height = `${segmentHeight}px`;
+                        segment.style.top = `${j * segmentHeight}px`;
+                        segment.style.left = '0';
+                        
+                        lineContainer.appendChild(segment);
+                        
+                        segments.push({
+                            element: segment,
+                            x: x,
+                            y: j * segmentHeight + segmentHeight / 2,
+                            height: segmentHeight
+                        });
+                    }
+                    
+                    gridContainer.appendChild(lineContainer);
                     
                     verticalLines.push({
-                        element: line,
+                        element: lineContainer,
                         x: x,
-                        points: [] // Punti di controllo per la deformazione
+                        segments: segments
                     });
-                }
-                
-                // Crea i punti di intersezione (invisibili)
-                for (let i = 0; i < numHorizontalLines; i++) {
-                    for (let j = 0; j < numVerticalLines; j++) {
-                        const x = j * lineSpacing;
-                        const y = i * lineSpacing;
-                        
-                        const point = {
-                            x: x,
-                            y: y,
-                            horizontalLine: horizontalLines[i],
-                            verticalLine: verticalLines[j],
-                            offsetX: 0,
-                            offsetY: 0
-                        };
-                        
-                        // Aggiungi il punto alle linee corrispondenti
-                        horizontalLines[i].points.push(point);
-                        verticalLines[j].points.push(point);
-                        
-                        intersectionPoints.push(point);
-                    }
                 }
             }
             
-            // Funzione per deformare le linee
+            // Funzione per calcolare l'elevazione sferica
+            function calculateSphericalElevation(dx, dy, distance, radius) {
+                if (distance >= radius) return 0;
+                
+                // Formula per una superficie sferica
+                // z = sqrt(r² - x² - y²) dove r è il raggio della sfera
+                const normalizedDistance = distance / radius;
+                const elevationFactor = Math.cos(normalizedDistance * Math.PI / 2);
+                return maxElevation * elevationFactor;
+            }
+            
+            // Funzione per deformare le linee in modo sferico
             function deformLines(mouseX, mouseY) {
                 // Resetta tutte le linee
                 horizontalLines.forEach(line => {
-                    line.element.style.transform = '';
                     line.element.classList.remove('active');
                 });
                 
                 verticalLines.forEach(line => {
-                    line.element.style.transform = '';
                     line.element.classList.remove('active');
                 });
                 
-                // Calcola le deformazioni per ogni punto di intersezione
-                intersectionPoints.forEach(point => {
-                    const dx = mouseX - point.x;
-                    const dy = mouseY - point.y;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-                    
-                    if (distance < influenceRadius) {
-                        // Calcola l'offset basato sulla distanza
-                        const influence = 1 - distance / influenceRadius;
-                        const offsetX = dx * influence * maxDeformation / influenceRadius;
-                        const offsetY = dy * influence * maxDeformation / influenceRadius;
-                        
-                        point.offsetX = offsetX;
-                        point.offsetY = offsetY;
-                        
-                        // Marca le linee come attive
-                        point.horizontalLine.element.classList.add('active');
-                        point.verticalLine.element.classList.add('active');
-                    } else {
-                        point.offsetX = 0;
-                        point.offsetY = 0;
-                    }
-                });
-                
-                // Applica le deformazioni alle linee orizzontali
+                // Deforma i segmenti orizzontali
                 horizontalLines.forEach(line => {
-                    if (line.points.some(p => p.offsetY !== 0)) {
-                        // Crea una trasformazione CSS per deformare la linea
-                        const controlPoints = line.points.map(p => `${p.x}px ${p.y + p.offsetY}px`).join(', ');
-                        line.element.style.clipPath = `polygon(0% ${line.y}px, ${controlPoints}, 100% ${line.y}px)`;
-                    } else {
-                        line.element.style.clipPath = '';
+                    let isLineActive = false;
+                    
+                    line.segments.forEach(segment => {
+                        const dx = mouseX - segment.x;
+                        const dy = mouseY - segment.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (distance < influenceRadius) {
+                            const elevation = calculateSphericalElevation(dx, dy, distance, influenceRadius);
+                            
+                            // Applica la trasformazione 3D
+                            segment.element.style.transform = `translateZ(${elevation}px)`;
+                            segment.element.style.backgroundColor = `rgba(${255 - 163 * (1 - elevation/maxElevation)}, ${95 + 92 * (1 - elevation/maxElevation)}, ${86 + 160 * (1 - elevation/maxElevation)}, ${0.3 + 0.4 * (elevation/maxElevation)})`;
+                            
+                            isLineActive = true;
+                        } else {
+                            segment.element.style.transform = 'translateZ(0)';
+                            segment.element.style.backgroundColor = '';
+                        }
+                    });
+                    
+                    if (isLineActive) {
+                        line.element.classList.add('active');
                     }
                 });
                 
-                // Applica le deformazioni alle linee verticali
+                // Deforma i segmenti verticali
                 verticalLines.forEach(line => {
-                    if (line.points.some(p => p.offsetX !== 0)) {
-                        // Crea una trasformazione CSS per deformare la linea
-                        const controlPoints = line.points.map(p => `${p.x + p.offsetX}px ${p.y}px`).join(', ');
-                        line.element.style.clipPath = `polygon(${line.x}px 0%, ${controlPoints}, ${line.x}px 100%)`;
-                    } else {
-                        line.element.style.clipPath = '';
+                    let isLineActive = false;
+                    
+                    line.segments.forEach(segment => {
+                        const dx = mouseX - segment.x;
+                        const dy = mouseY - segment.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (distance < influenceRadius) {
+                            const elevation = calculateSphericalElevation(dx, dy, distance, influenceRadius);
+                            
+                            // Applica la trasformazione 3D
+                            segment.element.style.transform = `translateZ(${elevation}px)`;
+                            segment.element.style.backgroundColor = `rgba(${255 - 163 * (1 - elevation/maxElevation)}, ${95 + 92 * (1 - elevation/maxElevation)}, ${86 + 160 * (1 - elevation/maxElevation)}, ${0.3 + 0.4 * (elevation/maxElevation)})`;
+                            
+                            isLineActive = true;
+                        } else {
+                            segment.element.style.transform = 'translateZ(0)';
+                            segment.element.style.backgroundColor = '';
+                        }
+                    });
+                    
+                    if (isLineActive) {
+                        line.element.classList.add('active');
                     }
                 });
             }
@@ -221,23 +262,21 @@
             
             // Funzione per gestire l'uscita del mouse
             function handleMouseLeave() {
-                // Resetta tutte le linee
+                // Resetta tutti i segmenti
                 horizontalLines.forEach(line => {
-                    line.element.style.transform = '';
-                    line.element.style.clipPath = '';
                     line.element.classList.remove('active');
+                    line.segments.forEach(segment => {
+                        segment.element.style.transform = 'translateZ(0)';
+                        segment.element.style.backgroundColor = '';
+                    });
                 });
                 
                 verticalLines.forEach(line => {
-                    line.element.style.transform = '';
-                    line.element.style.clipPath = '';
                     line.element.classList.remove('active');
-                });
-                
-                // Resetta tutti i punti
-                intersectionPoints.forEach(point => {
-                    point.offsetX = 0;
-                    point.offsetY = 0;
+                    line.segments.forEach(segment => {
+                        segment.element.style.transform = 'translateZ(0)';
+                        segment.element.style.backgroundColor = '';
+                    });
                 });
             }
             
