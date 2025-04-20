@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Spherical Grid Deformation</title>
+    <title>Enhanced 3D Spherical Grid</title>
     <style>
         body, html {
             margin: 0;
@@ -14,7 +14,8 @@
             justify-content: center;
             align-items: center;
             background-color: #1E1E2E;
-            perspective: 1000px;
+            perspective: 800px;
+            overflow: hidden;
         }
         
         .grid-container {
@@ -25,6 +26,7 @@
             overflow: hidden;
             background-color: rgba(24, 24, 37, 0.8);
             transform-style: preserve-3d;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
         }
         
         .grid-line {
@@ -51,8 +53,7 @@
         
         .grid-segment {
             position: absolute;
-            background-color: inherit;
-            transition: transform 0.2s ease, background-color 0.2s ease;
+            transition: all 0.2s ease;
             transform-style: preserve-3d;
         }
         
@@ -62,6 +63,10 @@
         
         .vertical-segment {
             width: 1px;
+        }
+        
+        .grid-segment.elevated {
+            box-shadow: 0 0 8px rgba(255, 95, 86, 0.7);
         }
     </style>
 </head>
@@ -75,14 +80,16 @@
             const gridContainer = document.getElementById('gridContainer');
             
             // Configurazione
-            const lineSpacing = 20; // Spazio tra le linee
-            const influenceRadius = 80; // Raggio di influenza del mouse
-            const maxElevation = 30; // Elevazione massima in pixel (asse Z)
-            const segmentsPerLine = 30; // Numero di segmenti per linea
+            const lineSpacing = 15; // Spazio tra le linee (ridotto per maggiore densità)
+            const influenceRadius = 100; // Raggio di influenza del mouse (aumentato)
+            const maxElevation = 60; // Elevazione massima in pixel (asse Z) (aumentata)
+            const segmentsPerLine = 40; // Numero di segmenti per linea (aumentato)
+            const maxLineThickness = 4; // Spessore massimo delle linee (nuovo)
             
             let horizontalLines = [];
             let verticalLines = [];
             let gridWidth, gridHeight;
+            let isMouseOver = false;
             
             // Funzione per creare la griglia
             function createGrid() {
@@ -115,6 +122,7 @@
                         segment.style.width = `${segmentWidth}px`;
                         segment.style.left = `${j * segmentWidth}px`;
                         segment.style.top = '0';
+                        segment.style.backgroundColor = 'rgba(92, 187, 246, 0.3)';
                         
                         lineContainer.appendChild(segment);
                         
@@ -122,7 +130,8 @@
                             element: segment,
                             x: j * segmentWidth + segmentWidth / 2,
                             y: y,
-                            width: segmentWidth
+                            width: segmentWidth,
+                            originalY: y
                         });
                     }
                     
@@ -151,6 +160,7 @@
                         segment.style.height = `${segmentHeight}px`;
                         segment.style.top = `${j * segmentHeight}px`;
                         segment.style.left = '0';
+                        segment.style.backgroundColor = 'rgba(92, 187, 246, 0.3)';
                         
                         lineContainer.appendChild(segment);
                         
@@ -158,7 +168,8 @@
                             element: segment,
                             x: x,
                             y: j * segmentHeight + segmentHeight / 2,
-                            height: segmentHeight
+                            height: segmentHeight,
+                            originalX: x
                         });
                     }
                     
@@ -172,27 +183,30 @@
                 }
             }
             
-            // Funzione per calcolare l'elevazione sferica
+            // Funzione per calcolare l'elevazione sferica esagerata
             function calculateSphericalElevation(dx, dy, distance, radius) {
                 if (distance >= radius) return 0;
                 
-                // Formula per una superficie sferica
-                // z = sqrt(r² - x² - y²) dove r è il raggio della sfera
+                // Formula migliorata per una superficie sferica più esagerata
                 const normalizedDistance = distance / radius;
-                const elevationFactor = Math.cos(normalizedDistance * Math.PI / 2);
+                // Utilizziamo una funzione coseno modificata per un effetto più pronunciato
+                const elevationFactor = Math.pow(Math.cos(normalizedDistance * Math.PI / 2), 1.5);
                 return maxElevation * elevationFactor;
             }
             
-            // Funzione per deformare le linee in modo sferico
+            // Funzione per calcolare lo spessore della linea in base all'elevazione
+            function calculateLineThickness(elevation) {
+                // Spessore proporzionale all'elevazione
+                return 1 + (maxLineThickness - 1) * (elevation / maxElevation);
+            }
+            
+            // Funzione per deformare le linee in modo sferico esagerato
             function deformLines(mouseX, mouseY) {
-                // Resetta tutte le linee
-                horizontalLines.forEach(line => {
-                    line.element.classList.remove('active');
-                });
-                
-                verticalLines.forEach(line => {
-                    line.element.classList.remove('active');
-                });
+                // Resetta tutte le linee se il mouse non è sopra il contenitore
+                if (!isMouseOver) {
+                    handleMouseLeave();
+                    return;
+                }
                 
                 // Deforma i segmenti orizzontali
                 horizontalLines.forEach(line => {
@@ -205,20 +219,36 @@
                         
                         if (distance < influenceRadius) {
                             const elevation = calculateSphericalElevation(dx, dy, distance, influenceRadius);
+                            const thickness = calculateLineThickness(elevation);
                             
-                            // Applica la trasformazione 3D
+                            // Applica la trasformazione 3D con spessore aumentato
                             segment.element.style.transform = `translateZ(${elevation}px)`;
-                            segment.element.style.backgroundColor = `rgba(${255 - 163 * (1 - elevation/maxElevation)}, ${95 + 92 * (1 - elevation/maxElevation)}, ${86 + 160 * (1 - elevation/maxElevation)}, ${0.3 + 0.4 * (elevation/maxElevation)})`;
+                            segment.element.style.height = `${thickness}px`;
+                            segment.element.style.marginTop = `-${(thickness-1)/2}px`; // Centra la linea più spessa
+                            
+                            // Colore più intenso e luminoso
+                            const opacity = 0.3 + 0.7 * (elevation/maxElevation);
+                            const r = Math.min(255, 92 + 163 * (elevation/maxElevation));
+                            const g = Math.min(255, 187 - 92 * (elevation/maxElevation));
+                            const b = Math.min(255, 246 - 160 * (elevation/maxElevation));
+                            
+                            segment.element.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${opacity})`;
+                            segment.element.classList.add('elevated');
                             
                             isLineActive = true;
                         } else {
                             segment.element.style.transform = 'translateZ(0)';
-                            segment.element.style.backgroundColor = '';
+                            segment.element.style.height = '1px';
+                            segment.element.style.marginTop = '0';
+                            segment.element.style.backgroundColor = 'rgba(92, 187, 246, 0.3)';
+                            segment.element.classList.remove('elevated');
                         }
                     });
                     
                     if (isLineActive) {
                         line.element.classList.add('active');
+                    } else {
+                        line.element.classList.remove('active');
                     }
                 });
                 
@@ -233,20 +263,36 @@
                         
                         if (distance < influenceRadius) {
                             const elevation = calculateSphericalElevation(dx, dy, distance, influenceRadius);
+                            const thickness = calculateLineThickness(elevation);
                             
-                            // Applica la trasformazione 3D
+                            // Applica la trasformazione 3D con spessore aumentato
                             segment.element.style.transform = `translateZ(${elevation}px)`;
-                            segment.element.style.backgroundColor = `rgba(${255 - 163 * (1 - elevation/maxElevation)}, ${95 + 92 * (1 - elevation/maxElevation)}, ${86 + 160 * (1 - elevation/maxElevation)}, ${0.3 + 0.4 * (elevation/maxElevation)})`;
+                            segment.element.style.width = `${thickness}px`;
+                            segment.element.style.marginLeft = `-${(thickness-1)/2}px`; // Centra la linea più spessa
+                            
+                            // Colore più intenso e luminoso
+                            const opacity = 0.3 + 0.7 * (elevation/maxElevation);
+                            const r = Math.min(255, 92 + 163 * (elevation/maxElevation));
+                            const g = Math.min(255, 187 - 92 * (elevation/maxElevation));
+                            const b = Math.min(255, 246 - 160 * (elevation/maxElevation));
+                            
+                            segment.element.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${opacity})`;
+                            segment.element.classList.add('elevated');
                             
                             isLineActive = true;
                         } else {
                             segment.element.style.transform = 'translateZ(0)';
-                            segment.element.style.backgroundColor = '';
+                            segment.element.style.width = '1px';
+                            segment.element.style.marginLeft = '0';
+                            segment.element.style.backgroundColor = 'rgba(92, 187, 246, 0.3)';
+                            segment.element.classList.remove('elevated');
                         }
                     });
                     
                     if (isLineActive) {
                         line.element.classList.add('active');
+                    } else {
+                        line.element.classList.remove('active');
                     }
                 });
             }
@@ -257,17 +303,28 @@
                 const mouseX = e.clientX - rect.left;
                 const mouseY = e.clientY - rect.top;
                 
+                isMouseOver = true;
                 deformLines(mouseX, mouseY);
+            }
+            
+            // Funzione per gestire l'entrata del mouse
+            function handleMouseEnter() {
+                isMouseOver = true;
             }
             
             // Funzione per gestire l'uscita del mouse
             function handleMouseLeave() {
+                isMouseOver = false;
+                
                 // Resetta tutti i segmenti
                 horizontalLines.forEach(line => {
                     line.element.classList.remove('active');
                     line.segments.forEach(segment => {
                         segment.element.style.transform = 'translateZ(0)';
-                        segment.element.style.backgroundColor = '';
+                        segment.element.style.height = '1px';
+                        segment.element.style.marginTop = '0';
+                        segment.element.style.backgroundColor = 'rgba(92, 187, 246, 0.3)';
+                        segment.element.classList.remove('elevated');
                     });
                 });
                 
@@ -275,9 +332,33 @@
                     line.element.classList.remove('active');
                     line.segments.forEach(segment => {
                         segment.element.style.transform = 'translateZ(0)';
-                        segment.element.style.backgroundColor = '';
+                        segment.element.style.width = '1px';
+                        segment.element.style.marginLeft = '0';
+                        segment.element.style.backgroundColor = 'rgba(92, 187, 246, 0.3)';
+                        segment.element.classList.remove('elevated');
                     });
                 });
+            }
+            
+            // Aggiungi animazione pulsante quando non c'è interazione
+            function addPulseAnimation() {
+                let time = 0;
+                const centerX = gridWidth / 2;
+                const centerY = gridHeight / 2;
+                
+                function pulse() {
+                    if (!isMouseOver) {
+                        time += 0.02;
+                        const pulseX = centerX + Math.sin(time) * 50;
+                        const pulseY = centerY + Math.cos(time * 0.7) * 30;
+                        
+                        deformLines(pulseX, pulseY);
+                    }
+                    
+                    requestAnimationFrame(pulse);
+                }
+                
+                pulse();
             }
             
             // Crea la griglia iniziale
@@ -286,7 +367,11 @@
             // Aggiungi event listeners
             window.addEventListener('resize', createGrid);
             gridContainer.addEventListener('mousemove', handleMouseMove);
+            gridContainer.addEventListener('mouseenter', handleMouseEnter);
             gridContainer.addEventListener('mouseleave', handleMouseLeave);
+            
+            // Aggiungi animazione pulsante
+            addPulseAnimation();
         });
     </script>
 </body>
